@@ -7,10 +7,38 @@ workflows:
         script: flutter pub get
       - name: Android proje dosyalarini olustur
         script: flutter create . --platforms=android
+      - name: ML Kit R8 ve Activity ayarlarini yapilandir
+        script: |
+          cat << 'PROGUARD' > android/app/proguard-rules.pro
+          -keep class com.google.mlkit.** { *; }
+          -keep class com.google.android.gms.** { *; }
+          -dontwarn com.google.mlkit.**
+          -dontwarn com.google.android.gms.**
+          PROGUARD
+
+          MAIN_ACT=$(find android/app/src/main -name "MainActivity.*")
+          if [[ "$MAIN_ACT" == *.kt ]]; then
+            PKG=$(grep "^package " "$MAIN_ACT")
+            cat << KOTLIN > "$MAIN_ACT"
+          $PKG
+
+          import io.flutter.embedding.android.FlutterFragmentActivity
+
+          class MainActivity: FlutterFragmentActivity()
+          KOTLIN
+          fi
+
+          if [ -f android/app/build.gradle.kts ]; then
+            sed -i 's/isMinifyEnabled = true/isMinifyEnabled = false/g' android/app/build.gradle.kts
+            sed -i 's/isShrinkResources = true/isShrinkResources = false/g' android/app/build.gradle.kts
+          elif [ -f android/app/build.gradle ]; then
+            sed -i 's/minifyEnabled true/minifyEnabled false/g' android/app/build.gradle
+            sed -i 's/shrinkResources true/shrinkResources false/g' android/app/build.gradle
+          fi
       - name: Test APK Derle
-        script: flutter build apk --release
+        script: flutter build apk --release --no-shrink
       - name: Play Store AAB Derle
-        script: flutter build appbundle --release
+        script: flutter build appbundle --release --no-shrink
     artifacts:
       - build/app/outputs/flutter-apk/*.apk
       - build/app/outputs/bundle/release/*.aab
